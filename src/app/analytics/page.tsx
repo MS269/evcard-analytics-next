@@ -7,15 +7,22 @@ import {
   subMonths,
   subYears,
 } from 'date-fns';
-import OracleDB from 'oracledb';
+import { redirect } from 'next/navigation';
+import oracledb from 'oracledb';
 
 import AnalyticsCard from '@/components/AnalyticsCard';
-import PrivatePage from '@/components/PrivatePage';
+import { validateRequest } from '@/lib/auth';
 import { dbConfig } from '@/lib/db';
 import { formatCardCount, formatSubscriberCount } from '@/lib/formatters';
 import { logger } from '@/lib/logger';
 
 export default async function AnalyticsPage() {
+  const { session } = await validateRequest();
+
+  if (!session) {
+    redirect('/sign-in');
+  }
+
   let connection;
   let cards;
   let subscribers;
@@ -36,7 +43,7 @@ export default async function AnalyticsPage() {
     const thisMonthStart = format(startOfMonth(now), formatStr);
     const thisMonthEnd = format(endOfMonth(now), formatStr);
 
-    connection = await OracleDB.getConnection(dbConfig);
+    connection = await oracledb.getConnection(dbConfig);
 
     // 남은 발급 원장 수
     const remainingCardCountResult = await connection.execute<number>(
@@ -190,15 +197,13 @@ export default async function AnalyticsPage() {
   }
 
   return (
-    <PrivatePage>
-      <div className="mt-8 flex flex-col items-center space-y-8">
-        <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
-          Evcard Analytics
-        </h3>
+    <div className="mt-8 flex flex-col items-center space-y-8">
+      <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
+        Evcard Analytics
+      </h3>
 
-        <AnalyticsCard cardTitle="카드 수" cardContents={cards} />
-        <AnalyticsCard cardTitle="가입자 수" cardContents={subscribers} />
-      </div>
-    </PrivatePage>
+      <AnalyticsCard cardTitle="카드 수" cardContents={cards} />
+      <AnalyticsCard cardTitle="가입자 수" cardContents={subscribers} />
+    </div>
   );
 }

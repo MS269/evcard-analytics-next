@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 
-import { useAdminStore } from '@/app/hooks/useAdminStore';
 import { cn } from '@/lib/utils';
 import { SignInValidator, TSignInValidator } from '@/lib/validators';
 
@@ -25,8 +24,6 @@ import { Input } from './ui/input';
 export default function SignInForm() {
   const router = useRouter();
 
-  const adminSignIn = useAdminStore((action) => action.signIn);
-
   const form = useForm<TSignInValidator>({
     resolver: zodResolver(SignInValidator),
     defaultValues: { password: '' },
@@ -38,8 +35,8 @@ export default function SignInForm() {
       return data;
     },
     onSuccess: () => {
-      adminSignIn();
       router.push('/analytics');
+      router.refresh();
     },
     onError: (error) => {
       if (error instanceof AxiosError) {
