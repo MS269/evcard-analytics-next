@@ -11,14 +11,14 @@ Evcard Analytics Next.js Server
 Install Node.js 20.x.x LTS
 
 ```bash
-$ npm install
-```
-
-```bash
 $ cp .env.example .env.local
 ```
 
 Setup .env.local file
+
+```bash
+$ npm install
+```
 
 ## Running the app
 
