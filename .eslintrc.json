@@ -1,3 +1,15 @@
 {
-  "extends": "next/core-web-vitals"
+  "plugins": ["simple-import-sort", "import"],
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:prettier/recommended",
+    "plugin:@tanstack/eslint-plugin-query/recommended"
+  ],
+  "rules": {
+    "simple-import-sort/imports": "error",
+    "simple-import-sort/exports": "error",
+    "import/first": "error",
+    "import/newline-after-import": "error",
+    "import/no-duplicates": "error"
+  }
 }
