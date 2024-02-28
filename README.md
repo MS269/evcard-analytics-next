@@ -1,6 +1,6 @@
 # Evcard Analytics Next
 
-Next.js + shadcn/ui + OracleDB
+Next.js + shadcn/ui + Lucia + DrizzleORM + Vercel Postgres + OracleDB
 
 ## Description
 

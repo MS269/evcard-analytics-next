@@ -1,17 +1,19 @@
-import { BetterSqlite3Adapter } from '@lucia-auth/adapter-sqlite';
+import { DrizzlePostgreSQLAdapter } from '@lucia-auth/adapter-drizzle';
 import { Lucia, type Session, TimeSpan, type User } from 'lucia';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 
-import { authDb } from './db';
+import { authDatabase } from './db/auth';
+import { sessionTable, userTable } from './db/schema';
 
 // import { webcrypto } from "crypto";
 // globalThis.crypto = webcrypto as Crypto;
 
-const adapter = new BetterSqlite3Adapter(authDb, {
-  user: 'user',
-  session: 'session',
-});
+const adapter = new DrizzlePostgreSQLAdapter(
+  authDatabase,
+  sessionTable,
+  userTable,
+);
 
 export const lucia = new Lucia(adapter, {
   sessionExpiresIn: new TimeSpan(5, 'm'),

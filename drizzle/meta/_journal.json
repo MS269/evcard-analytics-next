@@ -1,0 +1,13 @@
+{
+  "version": "5",
+  "dialect": "pg",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1709127305343,
+      "tag": "0000_safe_star_brand",
+      "breakpoints": true
+    }
+  ]
+}

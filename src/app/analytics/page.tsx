@@ -8,11 +8,11 @@ import {
   subYears,
 } from 'date-fns';
 import { redirect } from 'next/navigation';
-import oracledb from 'oracledb';
+import OracleDB from 'oracledb';
 
 import AnalyticsCard from '@/components/AnalyticsCard';
 import { validateRequest } from '@/lib/auth';
-import { dbConfig } from '@/lib/db';
+import { evcardDatabaseConfig } from '@/lib/db/evcard';
 import { formatCardCount, formatSubscriberCount } from '@/lib/formatters';
 import { logger } from '@/lib/logger';
 
@@ -43,7 +43,7 @@ export default async function AnalyticsPage() {
     const thisMonthStart = format(startOfMonth(now), formatStr);
     const thisMonthEnd = format(endOfMonth(now), formatStr);
 
-    connection = await oracledb.getConnection(dbConfig);
+    connection = await OracleDB.getConnection(evcardDatabaseConfig);
 
     // 남은 발급 원장 수
     const remainingCardCountResult = await connection.execute<number>(
