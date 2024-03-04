@@ -35,13 +35,13 @@ export default async function AnalyticsPage() {
     const lastYearEnd = format(endOfYear(subYears(now, 1)), formatStr);
 
     const thisYearStart = format(startOfYear(now), formatStr);
-    const thisYearEnd = format(endOfYear(now), formatStr);
 
     const lastMonthStart = format(startOfMonth(subMonths(now, 1)), formatStr);
     const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), formatStr);
 
     const thisMonthStart = format(startOfMonth(now), formatStr);
-    const thisMonthEnd = format(endOfMonth(now), formatStr);
+
+    const today = format(now, formatStr);
 
     connection = await OracleDB.getConnection(evcardDatabaseConfig);
 
@@ -86,9 +86,8 @@ export default async function AnalyticsPage() {
     // 올해 가입자 수
     const thisYearSubscriberCountResult = await connection.execute<number>(
       `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1
-      AND to_char(EDT_DT, 'YYMMDD') <= :2`,
-      [thisYearStart, thisYearEnd],
+      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
+      [thisYearStart],
     );
 
     if (!thisYearSubscriberCountResult.rows) {
@@ -114,9 +113,8 @@ export default async function AnalyticsPage() {
     // 금월 가입자 수
     const thisMonthSubscriberCountResult = await connection.execute<number>(
       `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1
-      AND to_char(EDT_DT, 'YYMMDD') <= :2`,
-      [thisMonthStart, thisMonthEnd],
+      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
+      [thisMonthStart],
     );
 
     if (!thisMonthSubscriberCountResult.rows) {
@@ -124,6 +122,19 @@ export default async function AnalyticsPage() {
     }
 
     const thisMonthSubscriberCount = thisMonthSubscriberCountResult.rows[0];
+
+    // 금일 가입자 수
+    const todaySubscriberCountResult = await connection.execute<number>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T
+      WHERE to_char(EDT_DT, 'YYMMDD') = :1`,
+      [today],
+    );
+
+    if (!todaySubscriberCountResult.rows) {
+      throw new Error('This month subscriber count not found');
+    }
+
+    const todaySubscriberCount = todaySubscriberCountResult.rows[0];
 
     cards = [
       {
@@ -152,6 +163,10 @@ export default async function AnalyticsPage() {
       {
         title: '금월 가입자 수',
         description: formatSubscriberCount(thisMonthSubscriberCount),
+      },
+      {
+        title: '금일 가입자 수',
+        description: formatSubscriberCount(todaySubscriberCount),
       },
     ];
   } catch (error) {
@@ -183,6 +198,10 @@ export default async function AnalyticsPage() {
       },
       {
         title: '금월 가입자 수',
+        description: 'Error',
+      },
+      {
+        title: '금일 가입자 수',
         description: 'Error',
       },
     ];
