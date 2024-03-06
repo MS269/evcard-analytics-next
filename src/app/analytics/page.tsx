@@ -1,218 +1,264 @@
+import axios from 'axios';
 import {
   endOfMonth,
+  endOfWeek,
   endOfYear,
   format,
   startOfMonth,
+  startOfWeek,
   startOfYear,
   subMonths,
+  subWeeks,
   subYears,
 } from 'date-fns';
 import { redirect } from 'next/navigation';
-import OracleDB from 'oracledb';
 
 import AnalyticsCard from '@/components/AnalyticsCard';
 import { validateRequest } from '@/lib/auth';
-import { evcardDatabaseConfig } from '@/lib/db/evcard';
-import { formatCardCount, formatSubscriberCount } from '@/lib/formatters';
+import {
+  formatAuthorizationToken,
+  formatCardCount,
+  formatSubscriberCount,
+} from '@/lib/formatters';
 import { logger } from '@/lib/logger';
 
+const url = process.env.EVCARD_ANALYTICS_NEST_SERVER_URL!;
+const token = process.env.EVCARD_ANALYTICS_NEST_SERVER_AUTH_TOKEN!;
+
 export default async function AnalyticsPage() {
+  const { error } = logger(AnalyticsPage.name);
+
   const { session } = await validateRequest();
 
   if (!session) {
     redirect('/sign-in');
   }
 
-  let connection;
-  let cards;
-  let subscribers;
+  const cardCounts = [];
+  const subscriberCounts = [];
 
+  const now = new Date();
+  const formatStr = 'yyMMdd';
+
+  const lastYearStart = format(startOfYear(subYears(now, 1)), formatStr);
+  const lastYearEnd = format(endOfYear(subYears(now, 1)), formatStr);
+
+  const thisYearStart = format(startOfYear(now), formatStr);
+
+  const lastMonthStart = format(startOfMonth(subMonths(now, 1)), formatStr);
+  const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), formatStr);
+
+  const thisMonthStart = format(startOfMonth(now), formatStr);
+
+  const lastWeekStart = format(startOfWeek(subWeeks(now, 1)), formatStr);
+  const lastWeekEnd = format(endOfWeek(subWeeks(now, 1)), formatStr);
+
+  const thisWeekStart = format(startOfWeek(now), formatStr);
+
+  const today = format(now, formatStr);
+
+  // 카드 수
   try {
-    const now = new Date();
-    const formatStr = 'yyMMdd';
+    const { data } = await axios.get(url + '/api/v1/cards', {
+      headers: { Authorization: formatAuthorizationToken(token) },
+    });
 
-    const lastYearStart = format(startOfYear(subYears(now, 1)), formatStr);
-    const lastYearEnd = format(endOfYear(subYears(now, 1)), formatStr);
+    cardCounts.push({
+      title: '총 카드 수',
+      description: formatCardCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const thisYearStart = format(startOfYear(now), formatStr);
+    cardCounts.push({
+      title: '총 카드 수',
+      description: 'Error',
+    });
+  }
 
-    const lastMonthStart = format(startOfMonth(subMonths(now, 1)), formatStr);
-    const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), formatStr);
+  // 사용중인 카드 수 & 총 가입자 수
+  try {
+    const { data } = await axios.get(url + '/api/v1/cards?status=true', {
+      headers: { Authorization: formatAuthorizationToken(token) },
+    });
 
-    const thisMonthStart = format(startOfMonth(now), formatStr);
+    cardCounts.push({
+      title: '사용중인 카드 수',
+      description: formatCardCount(data),
+    });
+    subscriberCounts.push({
+      title: '총 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const today = format(now, formatStr);
+    cardCounts.push({
+      title: '사용중인 카드 수',
+      description: 'Error',
+    });
+    subscriberCounts.push({
+      title: '총 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    connection = await OracleDB.getConnection(evcardDatabaseConfig);
+  // 남은 카드 수
+  try {
+    const { data } = await axios.get(url + '/api/v1/cards?status=false', {
+      headers: { Authorization: formatAuthorizationToken(token) },
+    });
 
-    // 남은 발급 원장 수
-    const remainingCardCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T WHERE STATUS = :1`,
-      [0],
+    cardCounts.push({
+      title: '남은 카드 수',
+      description: formatCardCount(data),
+    });
+  } catch (err) {
+    error(err);
+
+    cardCounts.push({
+      title: '남은 카드 수',
+      description: 'Error',
+    });
+  }
+
+  // 작년 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${lastYearStart}&end=${lastYearEnd}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!remainingCardCountResult.rows) {
-      throw new Error('Remaining card count not found');
-    }
+    subscriberCounts.push({
+      title: '작년 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const remainingCardCount = remainingCardCountResult.rows[0];
+    subscriberCounts.push({
+      title: '작년 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 총 가입자 수
-    const totalSubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T WHERE STATUS = :1`,
-      [1],
+  // 올해 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${thisYearStart}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!totalSubscriberCountResult.rows) {
-      throw new Error('Total subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '올해 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const totalSubscriberCount = totalSubscriberCountResult.rows[0];
+    subscriberCounts.push({
+      title: '올해 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 작년 가입자 수
-    const lastYearSubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1
-      AND to_char(EDT_DT, 'YYMMDD') <= :2`,
-      [lastYearStart, lastYearEnd],
+  // 전월 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${lastMonthStart}&end=${lastMonthEnd}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!lastYearSubscriberCountResult.rows) {
-      throw new Error('Last year subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '전월 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const lastYearSubscriberCount = lastYearSubscriberCountResult.rows[0];
+    subscriberCounts.push({
+      title: '전월 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 올해 가입자 수
-    const thisYearSubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
-      [thisYearStart],
+  // 금월 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${thisMonthStart}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!thisYearSubscriberCountResult.rows) {
-      throw new Error('This year subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '금월 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const thisYearSubscriberCount = thisYearSubscriberCountResult.rows[0];
+    subscriberCounts.push({
+      title: '금월 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 전월 가입자 수
-    const lastMonthSubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1
-      AND to_char(EDT_DT, 'YYMMDD') <= :2`,
-      [lastMonthStart, lastMonthEnd],
+  // 전주 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${lastWeekStart}&end=${lastWeekEnd}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!lastMonthSubscriberCountResult.rows) {
-      throw new Error('Last month subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '전주 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const lastMonthSubscriberCount = lastMonthSubscriberCountResult.rows[0];
+    subscriberCounts.push({
+      title: '전주 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 금월 가입자 수
-    const thisMonthSubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
-      [thisMonthStart],
+  // 금주 가입자 수
+  try {
+    const { data } = await axios.get(
+      url + `/api/v1/cards?start=${thisWeekStart}`,
+      { headers: { Authorization: formatAuthorizationToken(token) } },
     );
 
-    if (!thisMonthSubscriberCountResult.rows) {
-      throw new Error('This month subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '금주 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const thisMonthSubscriberCount = thisMonthSubscriberCountResult.rows[0];
+    subscriberCounts.push({
+      title: '금주 가입자 수',
+      description: 'Error',
+    });
+  }
 
-    // 금일 가입자 수
-    const todaySubscriberCountResult = await connection.execute<number>(
-      `SELECT count(CARD_NO) FROM EV_CARD_T
-      WHERE to_char(EDT_DT, 'YYMMDD') = :1`,
-      [today],
-    );
+  // 오늘 가입자 수
+  try {
+    const { data } = await axios.get(url + `/api/v1/cards?date=${today}`, {
+      headers: { Authorization: formatAuthorizationToken(token) },
+    });
 
-    if (!todaySubscriberCountResult.rows) {
-      throw new Error('This month subscriber count not found');
-    }
+    subscriberCounts.push({
+      title: '오늘 가입자 수',
+      description: formatSubscriberCount(data),
+    });
+  } catch (err) {
+    error(err);
 
-    const todaySubscriberCount = todaySubscriberCountResult.rows[0];
-
-    cards = [
-      {
-        title: '남은 발급 원장 수',
-        description: formatCardCount(remainingCardCount),
-      },
-    ];
-
-    subscribers = [
-      {
-        title: '총 가입자 수',
-        description: formatSubscriberCount(totalSubscriberCount),
-      },
-      {
-        title: '작년 가입자 수',
-        description: formatSubscriberCount(lastYearSubscriberCount),
-      },
-      {
-        title: '올해 가입자 수',
-        description: formatSubscriberCount(thisYearSubscriberCount),
-      },
-      {
-        title: '전월 가입자 수',
-        description: formatSubscriberCount(lastMonthSubscriberCount),
-      },
-      {
-        title: '금월 가입자 수',
-        description: formatSubscriberCount(thisMonthSubscriberCount),
-      },
-      {
-        title: '금일 가입자 수',
-        description: formatSubscriberCount(todaySubscriberCount),
-      },
-    ];
-  } catch (error) {
-    logger.error(AnalyticsPage.name, error);
-
-    cards = [
-      {
-        title: '남은 발급 원장 수',
-        description: 'Error',
-      },
-    ];
-
-    subscribers = [
-      {
-        title: '총 가입자 수',
-        description: 'Error',
-      },
-      {
-        title: '작년 가입자 수',
-        description: 'Error',
-      },
-      {
-        title: '올해 가입자 수',
-        description: 'Error',
-      },
-      {
-        title: '전월 가입자 수',
-        description: 'Error',
-      },
-      {
-        title: '금월 가입자 수',
-        description: 'Error',
-      },
-      {
-        title: '금일 가입자 수',
-        description: 'Error',
-      },
-    ];
-  } finally {
-    if (connection) {
-      try {
-        await connection.close();
-      } catch (error) {
-        logger.error(AnalyticsPage.name, error);
-      }
-    }
+    subscriberCounts.push({
+      title: '오늘 가입자 수',
+      description: 'Error',
+    });
   }
 
   return (
@@ -221,8 +267,8 @@ export default async function AnalyticsPage() {
         Evcard Analytics
       </h3>
 
-      <AnalyticsCard cardTitle="카드 수" cardContents={cards} />
-      <AnalyticsCard cardTitle="가입자 수" cardContents={subscribers} />
+      <AnalyticsCard cardTitle="카드 수" cardContents={cardCounts} />
+      <AnalyticsCard cardTitle="가입자 수" cardContents={subscriberCounts} />
     </div>
   );
 }

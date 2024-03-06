@@ -6,7 +6,7 @@ Evcard Analytics Next.js Server
 
 ## Prerequisites
 
-Setup Evcard Analytics NestJS Server
+Setup Evcard Analytics NestJS Server and copy Auth Token logged on the console
 
 ## Installation
 

@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { Argon2id } from 'oslo/password';
 
 import { lucia } from '@/lib/auth';
-import { authDatabase } from '@/lib/db/auth';
+import { db } from '@/lib/db';
 import { userTable } from '@/lib/db/schema';
 import { SignInValidator } from '@/lib/validators';
 
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
   const { password } = SignInValidator.parse(body);
 
-  const userSelectResult = await authDatabase
+  const userSelectResult = await db
     .select()
     .from(userTable)
     .where(eq(userTable.id, 'admin'))

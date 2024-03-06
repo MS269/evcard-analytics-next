@@ -1,4 +1,4 @@
-export const logger = {
-  log: (name: string, msg: any) => console.log(`${name}: ${msg}`),
-  error: (name: string, msg: any) => console.error(`${name}: ${msg}`),
-};
+export const logger = (name: string) => ({
+  log: (message: any) => console.log(`[${name}]: ${message}`),
+  error: (message: any) => console.error(`[${name}]: ${message}`),
+});

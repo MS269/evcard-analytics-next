@@ -3,17 +3,13 @@ import { Lucia, type Session, TimeSpan, type User } from 'lucia';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 
-import { authDatabase } from './db/auth';
+import { db } from './db';
 import { sessionTable, userTable } from './db/schema';
 
 // import { webcrypto } from "crypto";
 // globalThis.crypto = webcrypto as Crypto;
 
-const adapter = new DrizzlePostgreSQLAdapter(
-  authDatabase,
-  sessionTable,
-  userTable,
-);
+const adapter = new DrizzlePostgreSQLAdapter(db, sessionTable, userTable);
 
 export const lucia = new Lucia(adapter, {
   sessionExpiresIn: new TimeSpan(5, 'm'),
