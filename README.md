@@ -18,19 +18,18 @@ $ cp .env.example .env.local
 
 Setup .env.local file
 
-```shell
-npm install # this will migrate db
+```bash
+$ npm install # this will run db:migrate automatically
+# $ npm run db:migrate # this will migrate db
 ```
 
 ## Running the app
 
-```shell
+```bash
 # development
-npm run start
-
-# watch mode
-npm run start:dev
+$ npm run dev
 
 # production mode
-npm run start:prod
+$ npm run build
+$ npm run start
 ```
