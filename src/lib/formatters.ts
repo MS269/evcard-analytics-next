@@ -1,11 +1,18 @@
-export function formatCardCount(n: number) {
-  return `${new Intl.NumberFormat().format(n)} 장`;
+export function formatNumber(n: number) {
+  return new Intl.NumberFormat('ko-KR').format(n);
 }
 
-export function formatSubscriberCount(n: number) {
-  return `${new Intl.NumberFormat().format(n)} 명`;
+export function formatDiff(from: number, to: number) {
+  const formatter = new Intl.NumberFormat('ko-KR');
+  const formatted = formatter.format(to - from);
+  return to > from ? `+${formatted}` : formatted;
 }
 
-export function formatAuthorizationToken(token: string) {
-  return `Bearer ${token}`;
+export function formatDiffPercent(from: number, to: number) {
+  const formatter = new Intl.NumberFormat('ko-KR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  const formatted = formatter.format(((to - from) / from) * 100);
+  return to > from ? `+${formatted}%` : `${formatted}%`;
 }

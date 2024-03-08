@@ -1,274 +1,323 @@
-import axios from 'axios';
 import {
+  addMonths,
+  addQuarters,
+  addYears,
+  differenceInCalendarMonths,
+  differenceInCalendarQuarters,
+  differenceInCalendarYears,
   endOfMonth,
-  endOfWeek,
+  endOfQuarter,
   endOfYear,
   format,
   startOfMonth,
-  startOfWeek,
+  startOfQuarter,
   startOfYear,
-  subMonths,
-  subWeeks,
+  subQuarters,
   subYears,
 } from 'date-fns';
-import { redirect } from 'next/navigation';
+import { eq } from 'drizzle-orm';
+import { notFound, redirect } from 'next/navigation';
+import { getConnection } from 'oracledb';
 
-import AnalyticsCard from '@/components/AnalyticsCard';
+import AnalyticsBarChart from '@/components/AnalyticsBarChart';
+import AnalyticsPieChart from '@/components/AnalyticsPieChart';
 import { validateRequest } from '@/lib/auth';
-import {
-  formatAuthorizationToken,
-  formatCardCount,
-  formatSubscriberCount,
-} from '@/lib/formatters';
-import { logger } from '@/lib/logger';
-
-const url = process.env.EVCARD_ANALYTICS_NEST_SERVER_URL!;
-const token = process.env.EVCARD_ANALYTICS_NEST_SERVER_AUTH_TOKEN!;
+import { db } from '@/lib/db';
+import { oracledb } from '@/lib/db/oracledb';
+import { cacheTable } from '@/lib/db/schema';
+import { formatDiff, formatDiffPercent, formatNumber } from '@/lib/formatters';
+import { Logger } from '@/lib/logger';
 
 export default async function AnalyticsPage() {
-  const { error } = logger(AnalyticsPage.name);
-
   const { session } = await validateRequest();
 
   if (!session) {
     redirect('/sign-in');
   }
 
-  const cardCounts = [];
-  const subscriberCounts = [];
+  const logger = new Logger(AnalyticsPage.name);
 
-  const now = new Date();
-  const formatStr = 'yyMMdd';
+  let connection;
+  let result;
 
-  const lastYearStart = format(startOfYear(subYears(now, 1)), formatStr);
-  const lastYearEnd = format(endOfYear(subYears(now, 1)), formatStr);
+  let cardCountData = [];
+  let usingCardCount = 0;
+  let remainingCardCount = 0;
+  let remainingCardPercent = '';
 
-  const thisYearStart = format(startOfYear(now), formatStr);
+  let yearsSubscriberCountData = [];
+  let quartersSubscriberCountData = [];
+  let monthsSubscriberCountData = [];
 
-  const lastMonthStart = format(startOfMonth(subMonths(now, 1)), formatStr);
-  const lastMonthEnd = format(endOfMonth(subMonths(now, 1)), formatStr);
-
-  const thisMonthStart = format(startOfMonth(now), formatStr);
-
-  const lastWeekStart = format(startOfWeek(subWeeks(now, 1)), formatStr);
-  const lastWeekEnd = format(endOfWeek(subWeeks(now, 1)), formatStr);
-
-  const thisWeekStart = format(startOfWeek(now), formatStr);
-
-  const today = format(now, formatStr);
-
-  // 카드 수
   try {
-    const { data } = await axios.get(url + '/api/v1/cards', {
-      headers: { Authorization: formatAuthorizationToken(token) },
-    });
+    const now = new Date();
+    const formatStr = 'yyMMdd';
 
-    cardCounts.push({
-      title: '총 카드 수',
-      description: formatCardCount(data),
-    });
-  } catch (err) {
-    error(err);
+    connection = await getConnection(oracledb);
 
-    cardCounts.push({
-      title: '총 카드 수',
-      description: 'Error',
-    });
-  }
-
-  // 사용중인 카드 수 & 총 가입자 수
-  try {
-    const { data } = await axios.get(url + '/api/v1/cards?status=true', {
-      headers: { Authorization: formatAuthorizationToken(token) },
-    });
-
-    cardCounts.push({
-      title: '사용중인 카드 수',
-      description: formatCardCount(data),
-    });
-    subscriberCounts.push({
-      title: '총 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
-
-    cardCounts.push({
-      title: '사용중인 카드 수',
-      description: 'Error',
-    });
-    subscriberCounts.push({
-      title: '총 가입자 수',
-      description: 'Error',
-    });
-  }
-
-  // 남은 카드 수
-  try {
-    const { data } = await axios.get(url + '/api/v1/cards?status=false', {
-      headers: { Authorization: formatAuthorizationToken(token) },
-    });
-
-    cardCounts.push({
-      title: '남은 카드 수',
-      description: formatCardCount(data),
-    });
-  } catch (err) {
-    error(err);
-
-    cardCounts.push({
-      title: '남은 카드 수',
-      description: 'Error',
-    });
-  }
-
-  // 작년 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${lastYearStart}&end=${lastYearEnd}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
+    // 사용중인 카드 수
+    result = await connection.execute<number[]>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T WHERE STATUS = 1`,
     );
 
-    subscriberCounts.push({
-      title: '작년 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
+    if (result.rows) {
+      usingCardCount = result.rows[0][0];
+    }
+    cardCountData.push({ value: usingCardCount });
 
-    subscriberCounts.push({
-      title: '작년 가입자 수',
-      description: 'Error',
-    });
-  }
-
-  // 올해 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${thisYearStart}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
+    // 남은 카드 수
+    result = await connection.execute<number[]>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T WHERE STATUS = 0`,
     );
 
-    subscriberCounts.push({
-      title: '올해 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
+    if (result.rows) {
+      remainingCardCount = result.rows[0][0];
+    }
+    cardCountData.push({ value: remainingCardCount });
 
-    subscriberCounts.push({
-      title: '올해 가입자 수',
-      description: 'Error',
-    });
-  }
+    remainingCardPercent = (
+      (remainingCardCount / (usingCardCount + remainingCardCount)) *
+      100
+    ).toFixed(2);
 
-  // 전월 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${lastMonthStart}&end=${lastMonthEnd}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
+    // 연도별 가입자 수 (서비스 시작부터)
+    for (
+      let date = new Date(2021, 0, 1);
+      differenceInCalendarYears(date, now) < 0;
+      date = addYears(date, 1)
+    ) {
+      const key = `subscribers-${format(startOfYear(date), formatStr)}-${format(endOfYear(date), formatStr)}`;
+
+      const cached = await db
+        .select()
+        .from(cacheTable)
+        .where(eq(cacheTable.key, key))
+        .limit(1);
+
+      if (cached.length) {
+        yearsSubscriberCountData.push({
+          name: `${format(date, 'yy')}년`,
+          value: Number(cached[0].value),
+        });
+        continue;
+      }
+
+      result = await connection.execute<number[]>(
+        `SELECT count(CARD_NO) FROM EV_CARD_T
+        WHERE to_char(EDT_DT, 'YYMMDD') >= :1
+        AND to_char(EDT_DT, 'YYMMDD') <= :2`,
+        [
+          format(startOfYear(date), formatStr),
+          format(endOfYear(date), formatStr),
+        ],
+      );
+
+      if (result.rows) {
+        await db
+          .insert(cacheTable)
+          .values({ key, value: String(result.rows[0][0]) });
+
+        yearsSubscriberCountData.push({
+          name: `${format(date, 'yy')}년`,
+          value: result.rows[0][0],
+        });
+      }
+    }
+
+    // 올해 연도별 가입자 수
+    result = await connection.execute<number[]>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T
+      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
+      [format(startOfYear(now), formatStr)],
     );
 
-    subscriberCounts.push({
-      title: '전월 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
+    if (result.rows) {
+      yearsSubscriberCountData.push({
+        name: `${format(now, 'yy')}년`,
+        value: result.rows[0][0],
+      });
+    }
 
-    subscriberCounts.push({
-      title: '전월 가입자 수',
-      description: 'Error',
-    });
-  }
+    // 분기별 가입자 수 (저번 년도부터)
+    for (
+      let date = startOfYear(subYears(now, 1));
+      differenceInCalendarQuarters(date, now) < 0;
+      date = addQuarters(date, 1)
+    ) {
+      const key = `subscribers-${format(startOfQuarter(date), formatStr)}-${format(endOfQuarter(date), formatStr)}`;
 
-  // 금월 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${thisMonthStart}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
+      const cached = await db
+        .select()
+        .from(cacheTable)
+        .where(eq(cacheTable.key, key))
+        .limit(1);
+
+      if (cached.length) {
+        quartersSubscriberCountData.push({
+          name: `${format(date, 'q')}분기`,
+          value: Number(cached[0].value),
+        });
+        continue;
+      }
+
+      result = await connection.execute<number[]>(
+        `SELECT count(CARD_NO) FROM EV_CARD_T
+        WHERE to_char(EDT_DT, 'YYMMDD') >= :1
+        AND to_char(EDT_DT, 'YYMMDD') <= :2`,
+        [
+          format(startOfQuarter(date), formatStr),
+          format(endOfQuarter(date), formatStr),
+        ],
+      );
+
+      if (result.rows) {
+        await db
+          .insert(cacheTable)
+          .values({ key, value: String(result.rows[0][0]) });
+
+        quartersSubscriberCountData.push({
+          name: `${format(date, 'q')}분기`,
+          value: result.rows[0][0],
+        });
+      }
+    }
+
+    // 이번 분기 가입자 수
+    result = await connection.execute<number[]>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T
+      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
+      [format(startOfQuarter(now), formatStr)],
     );
 
-    subscriberCounts.push({
-      title: '금월 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
+    if (result.rows) {
+      quartersSubscriberCountData.push({
+        name: `${format(now, 'q')}분기`,
+        value: result.rows[0][0],
+      });
+    }
 
-    subscriberCounts.push({
-      title: '금월 가입자 수',
-      description: 'Error',
-    });
-  }
+    // 월별 가입자 수 (저번 분기부터)
+    for (
+      let date = startOfQuarter(subQuarters(now, 1));
+      differenceInCalendarMonths(date, now) < 0;
+      date = addMonths(date, 1)
+    ) {
+      const key = `subscribers-${format(startOfMonth(date), formatStr)}-${format(endOfMonth(date), formatStr)}`;
 
-  // 전주 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${lastWeekStart}&end=${lastWeekEnd}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
+      const cached = await db
+        .select()
+        .from(cacheTable)
+        .where(eq(cacheTable.key, key))
+        .limit(1);
+
+      if (cached.length) {
+        monthsSubscriberCountData.push({
+          name: `${format(date, 'M')}월`,
+          value: Number(cached[0].value),
+        });
+        continue;
+      }
+
+      result = await connection.execute<number[]>(
+        `SELECT count(CARD_NO) FROM EV_CARD_T
+        WHERE to_char(EDT_DT, 'YYMMDD') >= :1
+        AND to_char(EDT_DT, 'YYMMDD') <= :2`,
+        [
+          format(startOfMonth(date), formatStr),
+          format(endOfMonth(date), formatStr),
+        ],
+      );
+
+      if (result.rows) {
+        await db
+          .insert(cacheTable)
+          .values({ key, value: String(result.rows[0][0]) });
+
+        monthsSubscriberCountData.push({
+          name: `${format(date, 'M')}월`,
+          value: result.rows[0][0],
+        });
+      }
+    }
+
+    // 이번 달 가입자 수
+    result = await connection.execute<number[]>(
+      `SELECT count(CARD_NO) FROM EV_CARD_T
+      WHERE to_char(EDT_DT, 'YYMMDD') >= :1`,
+      [format(startOfMonth(now), formatStr)],
     );
 
-    subscriberCounts.push({
-      title: '전주 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
-
-    subscriberCounts.push({
-      title: '전주 가입자 수',
-      description: 'Error',
-    });
-  }
-
-  // 금주 가입자 수
-  try {
-    const { data } = await axios.get(
-      url + `/api/v1/cards?start=${thisWeekStart}`,
-      { headers: { Authorization: formatAuthorizationToken(token) } },
-    );
-
-    subscriberCounts.push({
-      title: '금주 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
-
-    subscriberCounts.push({
-      title: '금주 가입자 수',
-      description: 'Error',
-    });
-  }
-
-  // 오늘 가입자 수
-  try {
-    const { data } = await axios.get(url + `/api/v1/cards?date=${today}`, {
-      headers: { Authorization: formatAuthorizationToken(token) },
-    });
-
-    subscriberCounts.push({
-      title: '오늘 가입자 수',
-      description: formatSubscriberCount(data),
-    });
-  } catch (err) {
-    error(err);
-
-    subscriberCounts.push({
-      title: '오늘 가입자 수',
-      description: 'Error',
-    });
+    if (result.rows) {
+      monthsSubscriberCountData.push({
+        name: `${format(now, 'M')}월`,
+        value: result.rows[0][0],
+      });
+    }
+  } catch (error) {
+    logger.error(error);
+    return notFound();
+  } finally {
+    if (connection) {
+      try {
+        await connection.close();
+      } catch (error) {
+        logger.error(error);
+        return notFound();
+      }
+    }
   }
 
   return (
-    <div className="mt-8 flex flex-col items-center space-y-8">
-      <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight">
-        Evcard Analytics
-      </h3>
+    <div className="my-8 flex flex-col items-center space-y-8">
+      <AnalyticsPieChart
+        title="카드 수"
+        description={`${formatNumber(remainingCardCount)} 장 남았습니다.`}
+        mutedDescription={`${remainingCardPercent}%`}
+        data={cardCountData}
+      />
 
-      <AnalyticsCard cardTitle="카드 수" cardContents={cardCounts} />
-      <AnalyticsCard cardTitle="가입자 수" cardContents={subscriberCounts} />
+      <AnalyticsBarChart
+        title="연도별 가입자 수"
+        description={formatDiff(
+          yearsSubscriberCountData[yearsSubscriberCountData.length - 2].value,
+          yearsSubscriberCountData[yearsSubscriberCountData.length - 1].value,
+        )}
+        mutedDescription={`저번 년도보다 ${formatDiffPercent(
+          yearsSubscriberCountData[yearsSubscriberCountData.length - 2].value,
+          yearsSubscriberCountData[yearsSubscriberCountData.length - 1].value,
+        )}`}
+        data={yearsSubscriberCountData}
+      />
+
+      <AnalyticsBarChart
+        title="분기별 가입자 수"
+        description={formatDiff(
+          quartersSubscriberCountData[quartersSubscriberCountData.length - 2]
+            .value,
+          quartersSubscriberCountData[quartersSubscriberCountData.length - 1]
+            .value,
+        )}
+        mutedDescription={`저번 분기보다 ${formatDiffPercent(
+          quartersSubscriberCountData[quartersSubscriberCountData.length - 2]
+            .value,
+          quartersSubscriberCountData[quartersSubscriberCountData.length - 1]
+            .value,
+        )}`}
+        data={quartersSubscriberCountData}
+      />
+
+      <AnalyticsBarChart
+        title="월별 가입자 수"
+        description={formatDiff(
+          monthsSubscriberCountData[monthsSubscriberCountData.length - 2].value,
+          monthsSubscriberCountData[monthsSubscriberCountData.length - 1].value,
+        )}
+        mutedDescription={`저번 달보다 ${formatDiffPercent(
+          monthsSubscriberCountData[monthsSubscriberCountData.length - 2].value,
+          monthsSubscriberCountData[monthsSubscriberCountData.length - 1].value,
+        )}`}
+        data={monthsSubscriberCountData}
+      />
     </div>
   );
 }

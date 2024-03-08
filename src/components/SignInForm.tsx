@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 
 import { cn } from '@/lib/utils';
-import { SignInValidator, TSignInValidator } from '@/lib/validators';
+import { SignInValidator, type TSignInValidator } from '@/lib/validators';
 
 import { Button } from './ui/button';
 import {

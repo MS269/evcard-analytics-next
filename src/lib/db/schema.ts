@@ -17,3 +17,8 @@ export const sessionTable = pgTable('session', {
     mode: 'date',
   }).notNull(),
 });
+
+export const cacheTable = pgTable('cache', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
